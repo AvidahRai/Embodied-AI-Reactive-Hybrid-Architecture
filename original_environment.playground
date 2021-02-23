@@ -1,0 +1,26 @@
+<!DOCTYPE aseba-playground>
+<aseba-playground>
+	<color name="wall" r="0.9" g="0.9" b="0.9" />
+	<color name="yellow" r="1.0" g="1.0" b="0" />
+	<color name="red" r="1.0" g="0" b="0" />
+	<color name="blue" r="0" g="0" b="1.0" />
+	<color name="green" r="0" g="1.0" b="0" />
+	
+	<world w="110" h="110" color="wall" groundTexture="environment_bg.png" />
+	<robot type="thymio2" name="robot" x="15" y="30" port="33333" />
+	
+	<!-- <cylinder x="25.00" y="25.00" r="3.00" h="3.00" color="yellow" mass="75"/> -->
+	<!-- <cylinder x="50.00" y="105.00" r="3.00" h="3.00" color="yellow" mass="75"/> -->
+	<cylinder x="75.00" y="75.00" r="3.00" h="3.00" color="yellow" mass="75"/>
+	
+	<!--
+	<robot type="thymio2" x="35" y="15" port="" name="dead_robot_1" />
+	<robot type="thymio2" x="70" y="75" port="" name="dead_robot_2" />
+	<wall x="32.8" y="55.2" l1="1.6" l2="46.4" h="10" color="wall" />
+	<wall x="77.6" y="55.2" l1="1.6" l2="46.4" h="10" color="wall" />
+	<wall x="55.2" y="77.6" l1="46.4" l2="1.6" h="10" color="wall" />
+	<wall x="55.2" y="32.8" l1="46.4" l2="1.6" h="10" color="wall" />
+	-->
+	
+	<process command=":asebamassloader --once thymio-default-behaviours.aesl tcp:localhost;33333" />
+</aseba-playground>

@@ -1,0 +1,104 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+<event size="1" name="pair_run"/>
+
+
+<!--list of constants-->
+<constant value="500" name="SPEED"/>
+<constant value="1500" name="WALL_FOLLOW_THRES_UPPER"/>
+<constant value="3700" name="WALL_FOLLOW_THRES_LOWER"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II"># Individual Front Sensors
+var f_sensor_L
+var f_sensor_ML
+var f_sensor_C
+var f_sensor_MR
+var f_sensor_R
+
+# Front Sensors fusion
+var f_sensor_fusion_L
+var f_sensor_fusion_M
+var f_sensor_fusion_R
+
+callsub reset
+
+# Main event
+onevent prox
+	
+	callsub inhibit
+	
+	callsub reread_sensors
+												
+	# SUBSUMPTION ARCHITECTURE
+	callsub behaviour_forward
+	callsub behaviour_approach
+	callsub behaviour_avoid
+
+#
+# BEHAVIOURS
+#
+
+# FORWARD
+sub behaviour_forward
+	motor.left.target += SPEED
+	motor.right.target += SPEED
+
+# APPROACH
+sub behaviour_approach
+	if f_sensor_fusion_L > WALL_FOLLOW_THRES_UPPER and f_sensor_fusion_L &lt; WALL_FOLLOW_THRES_LOWER then
+		callsub inhibit
+		motor.right.target += SPEED             
+		call leds.top(32,16,0)
+	elseif f_sensor_fusion_R > WALL_FOLLOW_THRES_UPPER and f_sensor_fusion_R &lt; WALL_FOLLOW_THRES_LOWER then
+		callsub inhibit
+		motor.left.target += SPEED
+		call leds.top(32,16,0)		
+	end
+
+# AVOID			
+sub behaviour_avoid
+	if f_sensor_L >= WALL_FOLLOW_THRES_LOWER then
+		callsub inhibit
+		motor.left.target += SPEED
+		call leds.top(32,0,0)
+	elseif f_sensor_R >= WALL_FOLLOW_THRES_LOWER then
+		callsub inhibit
+		motor.right.target += SPEED
+		call leds.top(32,0,0)
+	end
+
+
+#	
+# UTILITIES
+#
+sub inhibit
+	callsub reset	
+	
+sub reset
+	call leds.top(0,0,0)
+	motor.left.target = 0
+	motor.right.target = 0
+	
+sub reread_sensors
+	f_sensor_L = prox.horizontal[0]
+	f_sensor_ML = prox.horizontal[1]
+	f_sensor_C = prox.horizontal[2]
+	f_sensor_MR = prox.horizontal[3]
+	f_sensor_R = prox.horizontal[4]
+	
+	f_sensor_fusion_L  = prox.horizontal[0] + prox.horizontal[1] + prox.horizontal[2]
+	f_sensor_fusion_M = prox.horizontal[1] + prox.horizontal[2] + prox.horizontal[3]
+	f_sensor_fusion_R = prox.horizontal[2] + prox.horizontal[3] + prox.horizontal[4]	
+	</node>
+
+
+</network>

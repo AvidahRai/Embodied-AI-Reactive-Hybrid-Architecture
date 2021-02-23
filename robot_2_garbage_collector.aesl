@@ -1,0 +1,436 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="500" name="SPEED"/>
+<constant value="9999" name="MAX_ENERGY"/>
+<constant value="100" name="PHYSIOLOGY_TICK"/>
+<constant value="0" name="ENERGY_FATAL_LIMIT"/>
+<constant value="5000" name="ENERGY_INIT"/>
+<constant value="4000" name="ENERGY_VIABILITY"/>
+<constant value="2500" name="ENERGY_SET_POINT"/>
+<constant value="50" name="ENERGY_CONSUMPTION_RATE"/>
+<constant value="250" name="ENERGY_INTAKE_PER_SE"/>
+<constant value="5" name="RECHARGE_TIME"/>
+<constant value="500" name="RANDOM_WALK_TICKS"/>
+<constant value="500" name="MAX_VIEW_THRES"/>
+<constant value="1500" name="NEAR_VIEW_THRES"/>
+<constant value="4000" name="PERSONAL_SPACE_THRES"/>
+<constant value="770" name="CHARGING_STATION_THRES_UPPER"/>
+<constant value="710" name="CHARGING_STATION_THRES_LOWER"/>
+<constant value="230" name="GARBAGE_THRES_UPPER"/>
+<constant value="175" name="GARBAGE_THRES_LOWER"/>
+<constant value="120" name="WASTE_SITE_THRES_UPPER"/>
+<constant value="1" name="WASTE_SITE_THRES_LOWER"/>
+<constant value="101" name="STATE_EXPLORE"/>
+<constant value="102" name="STATE_AVOID"/>
+<constant value="103" name="STATE_FIND_CHARGING_STATION"/>
+<constant value="104" name="STATE_FIND_GARBAGE"/>
+<constant value="105" name="STATE_FIND_WASTE_SITE"/>
+<constant value="106" name="STATE_RECHARGE"/>
+<constant value="107" name="STATE_PICK_GARBAGE"/>
+<constant value="108" name="STATE_DUMP_GARBAGE"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II"># Overall metrics
+var survival_time = 0
+var data
+var garbage_collection_count = 0
+
+# Define and initialise variables
+var energy # physiological variable
+var alive # 0 = dead, other values = alive
+var garbage_picked = 0
+
+var energy_error = 0
+var energy_LDv
+var energy_VDv
+var charging_time
+
+# Motivation variables
+var energy_deficit = 0
+var energy_stimulus = 0
+var recharge_motivation = 0
+
+# Behaviour dependent variables
+var selected_behaviour
+
+# Actuator variables
+var max_sval # maximum sensor value
+var max_sval_i # index of maximum sensor val
+var i
+
+# Individual Front Sensors
+var f_sensor_L
+var f_sensor_ML
+var f_sensor_C
+var f_sensor_MR
+var f_sensor_R
+
+# Front Sensors fusion
+var f_sensor_fusion_L
+var f_sensor_fusion_M
+var f_sensor_fusion_R
+var f_sensor_fusion_ALL
+
+# Ground Sensor
+var g_sensor_L
+var g_sensor_R
+
+#
+# Initialize
+#
+callsub initialise_physiology
+callsub reset
+
+# From - CAI_physiological_var_with_dummy_behaviour.aesl	
+sub initialise_physiology
+	energy = ENERGY_INIT # initial value for robot's energy
+	alive = 1 # robot is alive
+	timer.period[0] = PHYSIOLOGY_TICK # millisecond timer
+	# call sd.open(13,0)
+
+garbage_collection_count = 0
+
+# Energy variable goes down slowly over time if the robot does not eat
+# REFER - CAI_physiological_var_with_dummy_behaviour.aesl	
+sub energy_decay
+	energy -= ENERGY_CONSUMPTION_RATE/(1000/PHYSIOLOGY_TICK)
+	if energy &lt; 0 then
+		energy = 0
+	end
+	if energy &lt;= ENERGY_FATAL_LIMIT then
+		callsub death
+	end
+
+# REFER - CAI_physiological_var_with_dummy_behaviour.aesl		
+sub death
+	alive = 0
+	call leds.top(32,0,0) # red = dead
+	timer.period[0] = 0 # stop timer
+	timer.period[1] = 0
+	callsub reset_motors
+
+# Proximity sensor events control behavior selection
+onevent prox
+	callsub reset_motors
+	callsub reread_sensors
+				
+	if alive!=0 then
+		callsub behaviour_selection
+		callsub write_data
+	end
+
+# 
+# Main Control Architecture based on "Action Selection Dynamics"
+#
+sub behaviour_selection
+
+	# Recharge motivation
+	# REFER - Lecture 5 : Wanting
+ 	if energy &lt; ENERGY_VIABILITY then
+		energy_deficit = 1
+	else
+		energy_deficit = 0
+	end
+	if 
+	( g_sensor_L > CHARGING_STATION_THRES_LOWER and g_sensor_L &lt; CHARGING_STATION_THRES_UPPER ) and 
+		( g_sensor_R > CHARGING_STATION_THRES_LOWER and g_sensor_R &lt; CHARGING_STATION_THRES_UPPER )	
+	then
+		energy_stimulus = 1
+	else
+		energy_stimulus = 0	
+	end
+	# motivation = deficit + ( deficit * stimulus )
+	recharge_motivation = energy_deficit + (energy_deficit * energy_stimulus)
+	
+				
+	# Calculate the error ENERGY
+	# REFER - Lecture 5 : Calculating the error (homeostasis) 
+	energy_LDv = abs(ENERGY_FATAL_LIMIT - ENERGY_SET_POINT)
+	energy_VDv = abs( energy - ENERGY_SET_POINT )
+	if  energy_LDv > abs(ENERGY_FATAL_LIMIT - energy) then
+		energy_error = 1
+	else 
+		energy_error = 0
+	end
+	
+	# Reactive
+	if max_sval > PERSONAL_SPACE_THRES then
+		# Select "avoid"	
+		if  motor.left.speed == 0 and motor.right.speed == 0 then # Stuck
+			callsub behaviour_explore 
+		else
+			callsub behaviour_avoid
+		end
+
+	# Physiolgical	
+	elseif energy_error > 0 then
+		
+		callsub behaviour_find_charging_station
+				
+	# Motivational
+	elseif recharge_motivation > 1 then
+	
+		callsub behaviour_recharge
+	
+	# Symbolic
+	elseif  garbage_picked == 0 then
+		
+		callsub behaviour_find_garbage
+	
+	# Symbolic
+	elseif  garbage_picked == 1 then
+		
+		callsub behaviour_find_waste_site
+		
+	else
+		callsub behaviour_explore
+	end
+
+		
+#
+# Individual Behaviours
+#
+
+# FIND CHARGING STATION
+sub behaviour_find_charging_station
+	selected_behaviour = STATE_FIND_CHARGING_STATION
+	call leds.top(32,0,0)
+	if 
+		( g_sensor_L > CHARGING_STATION_THRES_LOWER and g_sensor_L &lt; CHARGING_STATION_THRES_UPPER ) and 
+		( g_sensor_R > CHARGING_STATION_THRES_LOWER and g_sensor_R &lt; CHARGING_STATION_THRES_UPPER ) 
+	then
+		callsub behaviour_recharge
+	else
+		callsub behaviour_explore
+	end
+	
+
+# FIND GARBAGE
+sub behaviour_find_garbage
+	selected_behaviour = STATE_FIND_GARBAGE
+	call leds.top(0,0,32)
+	if 
+		( g_sensor_L > GARBAGE_THRES_LOWER and g_sensor_L &lt; GARBAGE_THRES_UPPER ) or 
+		( g_sensor_R > GARBAGE_THRES_LOWER and g_sensor_R &lt; GARBAGE_THRES_UPPER ) 
+	then
+		callsub behaviour_pick_garbage
+	else
+		callsub behaviour_explore
+	end	
+
+# FIND WASTE SITE
+sub behaviour_find_waste_site
+	selected_behaviour = STATE_FIND_WASTE_SITE
+	call leds.top(32,16,0)
+	if 
+		( g_sensor_L > WASTE_SITE_THRES_LOWER and g_sensor_L &lt; WASTE_SITE_THRES_UPPER ) and 
+		( g_sensor_R > WASTE_SITE_THRES_LOWER and g_sensor_R &lt; WASTE_SITE_THRES_UPPER ) 
+	then
+		callsub behaviour_dump_garbage
+	else
+		callsub behaviour_explore		
+	end
+						
+# RECHARGE
+# REFER - CAI_physiological_var_with_dummy_behaviour.aesl	
+sub behaviour_recharge
+	if 
+		( g_sensor_L > CHARGING_STATION_THRES_LOWER and g_sensor_L &lt; CHARGING_STATION_THRES_UPPER ) and 
+		( g_sensor_R > CHARGING_STATION_THRES_LOWER and g_sensor_R &lt; CHARGING_STATION_THRES_UPPER ) 
+	then
+		call leds.top(0,255,0)
+		selected_behaviour = STATE_RECHARGE
+			
+		energy += ENERGY_INTAKE_PER_SE # 10 because called at 10Hz
+		if  energy > MAX_ENERGY then	
+			energy = MAX_ENERGY
+		end
+		callsub reset_motors
+		timer.period[1] = 1000
+		#timer.period[1] = RECHARGE_TIME * 1000
+	end
+
+# PICK GARBAGE	
+sub behaviour_pick_garbage
+	if 
+		(
+			( g_sensor_L > GARBAGE_THRES_LOWER and g_sensor_L &lt; GARBAGE_THRES_UPPER ) or 
+			( g_sensor_R > GARBAGE_THRES_LOWER and g_sensor_R &lt; GARBAGE_THRES_UPPER ) 
+		) and garbage_picked == 0
+	then
+		selected_behaviour = STATE_PICK_GARBAGE	
+		callsub reset_motors
+		timer.period[1] = 1000
+	end
+	
+
+# DROP GARBAGE
+sub behaviour_dump_garbage
+	if 
+		( 
+			( g_sensor_L > WASTE_SITE_THRES_LOWER and g_sensor_L &lt; WASTE_SITE_THRES_UPPER ) and 
+			( g_sensor_R > WASTE_SITE_THRES_LOWER and g_sensor_R &lt; WASTE_SITE_THRES_UPPER ) 
+		) and garbage_picked == 1
+		
+	then
+		selected_behaviour = STATE_DUMP_GARBAGE	
+		callsub reset_motors
+		timer.period[1] = 1000	
+	end
+
+# EXPLORE
+sub behaviour_explore
+	selected_behaviour = STATE_EXPLORE
+	
+	# Random Movement
+	callsub forward
+	timer.period[1] = RANDOM_WALK_TICKS
+	
+	# Logistic Movement
+	# c * angle * ( 1 - ( angle ) )
+
+# AVOID
+sub behaviour_avoid
+	selected_behaviour = STATE_AVOID
+	
+	if f_sensor_fusion_ALL >= 19000 then
+		# Stuck at corner
+		callsub random_turn
+	elseif  f_sensor_fusion_L > f_sensor_fusion_R  then
+		callsub turn_right
+	elseif f_sensor_fusion_R > f_sensor_fusion_L then
+		callsub turn_left
+	end
+	
+	
+#	
+# LOW-LEVEL BEHAVIOUR
+#
+# Approach Behaviour
+sub behaviour_approach
+	if  f_sensor_fusion_L > f_sensor_fusion_R  then
+		motor.right.target = SPEED
+	elseif f_sensor_fusion_R > f_sensor_fusion_L then
+		motor.left.target = SPEED
+	else
+		motor.left.target = 100
+		motor.right.target = 100
+	end	
+	
+sub forward
+	motor.left.target += SPEED
+	motor.right.target += SPEED
+	
+sub turn_left
+	motor.left.target -= SPEED * 3/5
+	motor.right.target += SPEED	* 3/5
+	
+sub turn_right
+	motor.left.target += SPEED * 3/5
+	motor.right.target -= SPEED * 3/5	
+	
+sub reverse
+	motor.left.target -= SPEED
+	motor.right.target -= SPEED	
+
+sub random_turn	
+	call math.rand(i)
+	if  i > -1 then
+		motor.left.target = -SPEED
+		motor.right.target = SPEED
+	else
+		motor.left.target = SPEED 
+		motor.right.target = -SPEED
+	end
+	
+sub stop
+	motor.left.target = 0
+	motor.right.target = 0
+	
+# UTILITIES
+sub reset
+	call leds.top(0,0,0)
+	callsub stop
+	
+sub reread_sensors
+
+	max_sval = prox.horizontal[0]
+	max_sval_i = 0		
+	# Loop through the remaining front proximity sensors (1 to 4)
+	for i in 1:4 do
+		if prox.horizontal[i] > max_sval then
+			max_sval = prox.horizontal[i] # record new max val
+			max_sval_i = i # record index of new max val
+		end
+	end
+	
+	f_sensor_L = prox.horizontal[0]
+	f_sensor_ML = prox.horizontal[1]
+	f_sensor_C = prox.horizontal[2]
+	f_sensor_MR = prox.horizontal[3]
+	f_sensor_R = prox.horizontal[4]
+	
+	f_sensor_fusion_L  = prox.horizontal[0] + prox.horizontal[1] + prox.horizontal[2]
+	f_sensor_fusion_M = prox.horizontal[1] + prox.horizontal[2] + prox.horizontal[3]
+	f_sensor_fusion_R = prox.horizontal[2] + prox.horizontal[3] + prox.horizontal[4]	
+	
+	f_sensor_fusion_ALL = f_sensor_L + f_sensor_ML + f_sensor_C  + f_sensor_MR + f_sensor_R
+	
+	g_sensor_L = prox.ground.delta[0]
+	g_sensor_R = prox.ground.delta[1]
+	
+sub reset_leds
+	call leds.top(0,0,0) # no light		
+
+sub reset_motors
+	motor.left.target = 0
+	motor.right.target = 0
+
+# Write Data	
+sub write_data
+	# call sd.write([energy], data)
+
+# Timer0
+onevent timer0
+	if alive!=0 then
+		callsub energy_decay
+		survival_time += 1
+	end
+	
+# Second Timer
+onevent timer1
+	if alive > 0 then
+		if  selected_behaviour == STATE_EXPLORE then			
+			callsub random_turn
+		
+		elseif  selected_behaviour == STATE_AVOID then
+			callsub random_turn
+		
+		elseif selected_behaviour == STATE_RECHARGE then
+		
+		elseif selected_behaviour == STATE_PICK_GARBAGE then
+			garbage_picked = 1
+		
+		elseif selected_behaviour == STATE_DUMP_GARBAGE then
+			garbage_picked = 0
+			garbage_collection_count += 1
+		end
+		
+		timer.period[1] = 0				
+	end	
+
+</node>
+
+
+</network>

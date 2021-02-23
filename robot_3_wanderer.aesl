@@ -1,0 +1,192 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="500" name="SPEED"/>
+<constant value="4000" name="PERSONAL_SPACE_THRES"/>
+<constant value="350" name="RANDOM_WALK_TICKS"/>
+<constant value="101" name="EXPLORE"/>
+<constant value="102" name="RANDOM_WALK"/>
+<constant value="103" name="AVOID"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II"># Behaviour dependent variables
+var selected_behaviour
+
+# Actuator variables
+var max_sval # maximum sensor value
+var max_sval_i # index of maximum sensor val
+var i
+
+# Individual Front Sensors
+var f_sensor_L
+var f_sensor_ML
+var f_sensor_C
+var f_sensor_MR
+var f_sensor_R
+
+# Front Sensors fusion
+var f_sensor_fusion_L
+var f_sensor_fusion_M
+var f_sensor_fusion_R
+var f_sensor_fusion_ALL
+
+#
+# Initialize
+#
+sub reset_leds
+	call leds.top(0,0,0) # no light		
+
+sub reset_motors
+	motor.left.target = 0
+	motor.right.target = 0
+
+
+# Proximity sensor events control behavior selection
+onevent prox
+	callsub reset_motors
+	callsub reread_sensors
+	
+	callsub behaviour_selection
+
+sub behaviour_selection
+	
+	callsub behaviour_explore
+	callsub behaviour_avoid
+	
+#
+# Individual Behaviours
+#
+
+# EXPLORE
+sub behaviour_explore
+	selected_behaviour = EXPLORE
+	
+	# Random Movement
+	callsub forward
+	timer.period[0] = RANDOM_WALK_TICKS
+	
+	# Logistic Movement
+	# c * angle * ( 1 - ( angle ) )
+	
+# AVOID
+sub behaviour_avoid
+	
+	if max_sval > PERSONAL_SPACE_THRES then
+		selected_behaviour = AVOID
+		if f_sensor_fusion_ALL >= 19000 then
+			# Stuck at corner
+			callsub random_turn
+		elseif  f_sensor_fusion_L > f_sensor_fusion_R  then
+			callsub turn_right
+		elseif f_sensor_fusion_R > f_sensor_fusion_L then
+			callsub turn_left
+		end
+	end
+
+# RANDOM WALK
+sub behaviour_random_walk
+	
+	
+	
+# LOW-LEVEL BEHAVIOUR
+sub forward
+	motor.left.target += SPEED
+	motor.right.target += SPEED
+	
+sub turn_left
+	motor.left.target -= SPEED * 3/5
+	motor.right.target += SPEED	* 3/5
+	
+sub turn_right
+	motor.left.target += SPEED * 3/5
+	motor.right.target -= SPEED * 3/5	
+	
+sub reverse
+	motor.left.target -= SPEED
+	motor.right.target -= SPEED	
+
+sub random_turn	
+	call math.rand(i)
+	if  i > -1 then
+		motor.left.target = -SPEED
+		motor.right.target = SPEED
+	else
+		motor.left.target = SPEED 
+		motor.right.target = -SPEED
+	end
+	
+sub stop
+	motor.left.target = 0
+	motor.right.target = 0
+	
+# UTILITIES
+sub reset
+	call leds.top(0,0,0)
+	callsub stop
+	
+sub reread_sensors
+
+	max_sval = prox.horizontal[0]
+	max_sval_i = 0		
+	# Loop through the remaining front proximity sensors (1 to 4)
+	for i in 1:4 do
+		if prox.horizontal[i] > max_sval then
+			max_sval = prox.horizontal[i] # record new max val
+			max_sval_i = i # record index of new max val
+		end
+	end
+	
+	f_sensor_L = prox.horizontal[0]
+	f_sensor_ML = prox.horizontal[1]
+	f_sensor_C = prox.horizontal[2]
+	f_sensor_MR = prox.horizontal[3]
+	f_sensor_R = prox.horizontal[4]
+	
+	f_sensor_fusion_L  = prox.horizontal[0] + prox.horizontal[1] + prox.horizontal[2]
+	f_sensor_fusion_M = prox.horizontal[1] + prox.horizontal[2] + prox.horizontal[3]
+	f_sensor_fusion_R = prox.horizontal[2] + prox.horizontal[3] + prox.horizontal[4]	
+	
+	f_sensor_fusion_ALL = f_sensor_L + f_sensor_ML + f_sensor_C  + f_sensor_MR + f_sensor_R
+	
+# Random turn
+sub behaviour_random_turn	
+	call math.rand(i)
+	if  i > -1 then
+		motor.left.target = -SPEED
+		motor.right.target = SPEED
+	else
+		motor.left.target = SPEED 
+		motor.right.target = -SPEED
+	end
+# Timer0
+onevent timer0
+	if  selected_behaviour == EXPLORE then			
+		callsub behaviour_random_turn
+		timer.period[1] = RANDOM_WALK_TICKS
+	end
+		
+	if  selected_behaviour == AVOID then
+		callsub behaviour_random_turn
+	end	
+
+	
+# Second Timer
+onevent timer1
+	if  selected_behaviour == EXPLORE then
+		callsub behaviour_random_turn
+	end	
+
+</node>
+
+
+</network>
