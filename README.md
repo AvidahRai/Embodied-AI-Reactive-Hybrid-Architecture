@@ -1,6 +1,6 @@
 # Embodied-AI-Reactive-Hybrid-Architecture
 
-<i>"Intelligence always manifests in behaviour and that we must understand the behaviour." - Rolf Pfeifer</i>
+<i>"Intelligence always manifests itself in behaviour and that we must understand the behaviour." - Rolf Pfeifer</i>
 
 Author: Avinash Rai
 
