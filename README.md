@@ -10,7 +10,7 @@ Notes:-
 - Purpose: To design, implement, experiment and optimize a self-sustaining agent (robot) tasked to clean garbage repeatedly from its environment with high efficiency. 
 - Experimented in different unpredictible environments which will also include other agents serving to deter the primary agent from its goal (and survival). 
 - An agent has only two primary sensors (front and ground) at its disposable to percieve its environment. 
-- Agents are fitted with different Design Architectures defined in Embodied Cognition literature.
+- Agents have been designed with guidance from different Design Architectures defined in the Embodied Cognition literature.
 
 
 Three main robots functionalities:-
