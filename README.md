@@ -1,7 +1,12 @@
 # Embodied-AI-Reactive-Hybrid-Architecture
+
+<i>"Intelligence always manifests in behaviour and that we must understand the behaviour." - Rolf Pfeifer</i>
+
 Author: Avinash Rai
 
 Aseba Programming Language for Thymio 2 Robot
+
+
 
 Three main robots functionalities:-
 MAIN BEHAVIOUR      | FILE                            | DESIGN ARCHITECTURE
