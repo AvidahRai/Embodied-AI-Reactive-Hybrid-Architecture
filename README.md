@@ -1,8 +1,9 @@
 # Embodied-AI-Reactive-Hybrid-Architecture
 Author: Avinash Rai
+
 Aseba Programming Language for Thymio 2 Robot
 
-Three main robots functionality:-
+Three main robots functionalities:-
 MAIN BEHAVIOUR      | FILE                            | DESIGN ARCHITECTURE
 --------------------| --------------------------------|------------------------------------------------
 Wall following      | robot_1_wall_following.aesl     | Reactive - "Subsumption Architecture"
