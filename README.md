@@ -1,6 +1,5 @@
 # Embodied-AI-Reactive-Hybrid-Architecture
 Author: Avinash Rai
-
 Aseba Programming Language for Thymio 2 Robot
 
 Three main robots functionality:-
@@ -13,4 +12,7 @@ Wandering           | robot_3_wanderer.aesl           | Reactive
 Two environments:- 
 1) simple_environment.playground
 2) complex_environment.playground
+
+<b>Fig: Behaviour Action Selection Dynamics for Garbage Collection</b>
+![action_selection_dynamics](https://user-images.githubusercontent.com/12041019/155834894-a212f629-bee6-43b7-afeb-b3e2b571beb2.jpg)
 
