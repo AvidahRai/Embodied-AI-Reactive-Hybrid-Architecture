@@ -6,6 +6,7 @@ Author: Avinash Rai
 
 Aseba Programming Language for Thymio 2 Robot
 
+Notes:-
 - Purpose: To design, implement, experiment and optimize a self-sustaining agent tasked to clean garbage repeatedly from its environment with high efficiency. 
 - Experimented in different unpredictible environments which will also include other agents serving to deter the primary agent from its goal (and survival). 
 - An agent has only two primary sensors (front and ground) at its disposable to percieve its environment. 
